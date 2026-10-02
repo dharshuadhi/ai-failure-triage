@@ -29,4 +29,4 @@ class TriageResult:
     evidence: list = field(default_factory=list)  # matched signals
 
 
-CATEGORIES = ("assertion", "timeout", "locator", "connection", "setup", "unknown")
+CATEGORIES = ("assertion", "timeout", "locator", "connection", "setup", "environment", "unknown")

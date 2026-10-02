@@ -33,6 +33,14 @@ PATTERNS = [
      0.75,
      "The test never really ran — setup or teardown failed.",
      "Fix the fixture/environment setup; check test data and service prerequisites."),
+    ("environment",
+     [r"ModuleNotFoundError", r"ImportError", r"pip.*(failed|error)", r"uv.*(failed|error)",
+      r"pre-commit.*(failed|error)", r"tox.*(failed|error)", r"dependency.*(conflict|resolution)",
+      r"externally-managed-environment", r"Could not (resolve|install|download)",
+      r"ECONNRESET.*registry", r"npm ERR!", r"action.*failed"],
+     0.7,
+     "The CI job failed before tests ran — broken environment, dependencies, or tooling.",
+     "Check the failed step's log: pin or update dependencies, fix the CI config."),
 ]
 
 FIXTURE_HINTS = {

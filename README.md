@@ -52,10 +52,67 @@ python -m src.cli -i results.xml --baseline last-week.json --engine rule
 # Record the run and see the flaky leaderboard (Redis if --redis-url given)
 python -m src.cli -i results.xml --analytics --redis-url redis://localhost:6379
 
+# Triage LIVE failures from any public repo's GitHub Actions
+python -m src.cli --ci pallets/flask --ci-limit 2 --engine rule
+# (set GITHUB_TOKEN for log downloads + 5,000 req/hr; run/job listing works anonymously)
+
+# Wilson-score flake verdicts from run history
+python -m src.cli -i results.xml --history history.json --flake-stats
+
+# Preview filing one GitHub issue per failure cluster (dry-run by default)
+python -m src.cli -i results.xml --file-issues owner/repo
+# Actually file them:
+GITHUB_TOKEN=ghp_... python -m src.cli -i results.xml --file-issues owner/repo --no-dry-run
+
 # AI agent (needs Azure OpenAI in .env)
 cp .env.example .env
 python -m src.cli -i results.xml --engine ai
 ```
+
+## Live CI triage
+
+Point the tool at any public repo and triage its real, current failures —
+no log files to download by hand:
+
+```bash
+python -m src.cli --ci pallets/flask --ci-limit 2 --engine rule --cluster
+```
+
+Real output (failures pulled live from `pallets/flask` Actions runs):
+
+```
+Pulled 2 failures from pallets/flask live runs.
+### 559abaffa2bc — 1 failure(s)
+Representative: pallets/flask#34727211010/Development Versions
+Message: ImportError while loading conftest '/home/runner/work/flask/flask/tests/conftest.py'.
+```
+
+What the provider does: lists failed workflow runs → finds failed jobs →
+downloads log archives → strips CI timestamp prefixes → parses failures with the
+same parsers as local files. Two real-world lessons baked in:
+- GitHub 302-redirects log downloads to blob storage, which **rejects GitHub
+  tokens** — the downloader strips `Authorization` on cross-host redirects.
+- Anonymous log downloads are 403; run/job metadata works without auth.
+  Set `GITHUB_TOKEN` for log access + 5,000 req/hr.
+
+## Statistical flake detection
+
+`--flake-stats` replaces gut-feel flakiness with Wilson score 95% confidence
+intervals over run history:
+
+| Test | Runs | Fail | Rate | 95% CI | Verdict |
+|---|---|---|---|---|---|
+| test_create_order | 5 | 5 | 100% | 57%–100% | **broken** |
+| test_invalid_password | 5 | 2 | 40% | 12%–77% | **flaky** |
+
+Verdicts: `stable` / `flaky` / `broken` / `suspect` / `insufficient-data` —
+so "3 fails in 5 runs" and "300 in 500" are never treated the same.
+
+## File issues from triage
+
+`--file-issues owner/repo` drafts one GitHub issue per fingerprint cluster
+(title, priority, affected tests, root cause, evidence) and files it via the API.
+Dry-run by default; `--no-dry-run` with `GITHUB_TOKEN` files for real.
 
 `history.json` maps test ids to recent runs — `{"tests.test_x::test_y": ["pass","fail","pass"]}`.
 `owners.json` maps test-id prefixes to teams — `{"tests.test_api": "platform-team", "*": "qa-oncall"}`.
@@ -64,10 +121,20 @@ python -m src.cli -i results.xml --engine ai
 
 ### Triage core
 - 🔎 **Multi-format parsers** — JUnit XML, pytest text output, raw stack-trace logs
-- 🏷️ **Failure classification** — timeout, locator, connection, assertion, setup
-- 🌊 **Flaky detection** — pass/fail history marks intermittent tests for quarantine
+  (CI timestamp prefixes stripped automatically)
+- 🏷️ **Failure classification** — timeout, locator, connection, assertion, setup,
+  environment (infra/dependency failures)
+- 🌊 **Flaky detection** — Wilson-score 95% confidence intervals over run history;
+  verdicts: stable / flaky / broken / suspect / insufficient-data
 - 👥 **Owner routing** — prefix-based team mapping
 - 🎯 **Priority assignment** — systemic outages hit P1, flakes get quarantined at P3
+
+### Live data
+- 📡 **GitHub Actions provider** — triage live failures from any public repo's runs:
+  failed runs → failed jobs → log archives → parsed failures (handles the
+  cross-host auth redirect GitHub's log downloads require)
+- 📝 **Issue filing** — one GitHub issue per fingerprint cluster via the API
+  (dry-run by default)
 
 ### Deep analysis
 - 🧬 **Stack-trace fingerprinting** — Sentry-style normalization (line numbers, addresses,
@@ -95,6 +162,9 @@ src/
   pipeline.py     orchestration: parse -> triage -> results
   parsers.py      JUnit XML / pytest text / log parsers
   rule_triage.py  classifier, flaky detection, owners, priorities
+  ci_providers.py   GitHub Actions provider: live failed runs -> logs -> failures
+  stats.py          Wilson-score flake verdicts over run history
+  issues.py         file triaged clusters as GitHub issues
   fingerprint.py  stack-trace normalization + hashing -> failure clusters
   analytics.py    Redis bitmap/HyperLogLog failure analytics (+memory fallback)
   bugreports.py   bug-report drafts + baseline diff

@@ -7,6 +7,12 @@ from .models import Failure
 
 FAILED_LINE_RE = re.compile(r"^(FAILED|ERROR)\s+(\S+?)\s*-\s*(.*)$")
 TRACE_HEADER_RE = re.compile(r"^_{2,}\s*(.+?)\s*_{2,}$")
+# GitHub Actions / CI log lines are prefixed with an RFC3339 timestamp.
+TS_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+")
+
+
+def _strip_ts(line: str) -> str:
+    return TS_PREFIX_RE.sub("", line)
 
 
 def parse_junit_xml(path: str) -> list:
@@ -39,7 +45,8 @@ def parse_pytest_text(text: str) -> list:
     tracebacks = {}
     current = None
     buf = []
-    for line in text.splitlines():
+    for raw in text.splitlines():
+        line = _strip_ts(raw)
         m = TRACE_HEADER_RE.match(line.strip())
         if m:
             if current:
@@ -57,7 +64,8 @@ def parse_pytest_text(text: str) -> list:
     if current:
         tracebacks[current] = "\n".join(buf).strip()
 
-    for line in text.splitlines():
+    for raw in text.splitlines():
+        line = _strip_ts(raw)
         m = FAILED_LINE_RE.match(line.strip())
         if not m:
             continue
