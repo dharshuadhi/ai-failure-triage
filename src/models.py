@@ -18,7 +18,7 @@ class Failure:
 class TriageResult:
     """Triage verdict for one failure."""
     test_id: str
-    category: str                     # assertion | timeout | locator | connection | setup | unknown
+    category: str                     # see CATEGORIES below
     confidence: float                 # 0.0 - 1.0
     flaky: bool = False               # intermittent in recent history
     owner: str = ""                   # suggested owner / team
@@ -29,4 +29,6 @@ class TriageResult:
     evidence: list = field(default_factory=list)  # matched signals
 
 
-CATEGORIES = ("assertion", "timeout", "locator", "connection", "setup", "environment", "unknown")
+CATEGORIES = ("assertion", "timeout", "locator", "connection", "setup",
+              "environment", "build", "dependency", "infrastructure", "http",
+              "data", "concurrency", "framework", "unknown")

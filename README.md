@@ -22,7 +22,9 @@ flowchart LR
 
 1. **Feed it failures** — a JUnit XML report, `pytest` output, or raw logs (file, glob, or folder).
 2. **Pick an engine** — `auto` uses the Azure AI agent when credentials exist, otherwise the offline rule engine.
-3. **Rule triage** classifies every failure (timeout, locator, connection, assertion, setup),
+3. **Rule triage** classifies every failure (assertion, timeout, locator, connection,
+   setup, environment, build, dependency, infrastructure, http, data, concurrency,
+   framework — with an LLM fallback for anything the rules can't classify),
    checks run history for flakiness, suggests an owner from your team map, and assigns P1–P4.
 4. **The AI agent** (optional) investigates each failure with tools: it reads stack traces,
    looks up history, and searches for systemic patterns across failures — then writes a root-cause verdict.
@@ -120,10 +122,15 @@ Dry-run by default; `--no-dry-run` with `GITHUB_TOKEN` files for real.
 ## Features
 
 ### Triage core
-- 🔎 **Multi-format parsers** — JUnit XML, pytest text output, raw stack-trace logs
+- 🔎 **Multi-format parsers** — JUnit XML, pytest text output, raw stack-trace logs,
+  plus build logs (Maven `[ERROR]` output, Gradle errors, `npm ERR!` blocks,
+  TypeScript `error TS####` lines)
   (CI timestamp prefixes stripped automatically)
-- 🏷️ **Failure classification** — timeout, locator, connection, assertion, setup,
-  environment (infra/dependency failures)
+- 🏷️ **Failure classification** — assertion, timeout, locator, connection, setup,
+  environment, build (compile errors), dependency (install failures),
+  infrastructure (OOM/disk/runner), http (4xx/5xx, auth, rate-limit, TLS/DNS),
+  data (DB/file/schema), concurrency (deadlock/race), framework (runner errors);
+  an LLM fallback classifies anything the rules can't
 - 🌊 **Flaky detection** — Wilson-score 95% confidence intervals over run history;
   verdicts: stable / flaky / broken / suspect / insufficient-data
 - 👥 **Owner routing** — prefix-based team mapping

@@ -87,7 +87,12 @@ def parse_pytest_text(text: str) -> list:
 
 
 def parse_generic_log(text: str) -> list:
-    """Best-effort extraction of stack-trace blocks from a raw log."""
+    """Best-effort extraction of failure blocks from a raw log.
+
+    First tries Python traceback blocks; if the log has none (e.g. an infra
+    or build log), falls back to the lines that look like errors so there is
+    always *something* for the triage engine to classify.
+    """
     failures = []
     blocks = re.split(r"(?=Traceback \(most recent call last\))", text)
     for i, block in enumerate(blocks[1:], 1):
@@ -107,6 +112,25 @@ def parse_generic_log(text: str) -> list:
             traceback=block.strip(),
             source="log",
         ))
+    if failures:
+        return failures
+
+    # No traceback blocks: harvest error-looking lines instead.
+    lines = text.splitlines()
+    err_idx = [i for i, l in enumerate(lines)
+               if re.search(r"(?i)\w*(error|exception|fail(?:ed|ure)?|fatal|panic|oomkilled|timeout|denied|refused|"
+                            r"not found|missing|deadlock|daemon|killed|abort|cancelled|unreachable)\b", l)]
+    if not err_idx:
+        return []
+    first = err_idx[0]
+    context = lines[max(0, first - 3):first + 4]
+    message = lines[first].strip()[:300]
+    failures.append(Failure(
+        test_id="log-error-1",
+        message=message,
+        traceback="\n".join(context).strip(),
+        source="log",
+    ))
     return failures
 
 
@@ -116,7 +140,130 @@ def parse_any(path: str) -> list:
         return parse_junit_xml(path)
     text = open(path, encoding="utf-8", errors="replace").read()
     failures = parse_pytest_text(text)
+    if failures:
+        return failures
+    # Build logs can mix tools (e.g. a monorepo CI log), so aggregate
+    # across all build parsers instead of stopping at the first hit.
+    for build_parser in (parse_maven_log, parse_gradle_log, parse_npm_log, parse_typescript_log):
+        failures.extend(build_parser(text))
     return failures or parse_generic_log(text)
+
+
+# --- Build-log parsers -----------------------------------------------------
+
+MAVEN_ERROR_RE = re.compile(r"^\[ERROR\]\s+(\S+?):\[(\d+)(?:,\d+)?\]\s*(.*)$")
+GRADLE_ERROR_RE = re.compile(r"^(\S+\.java):(\d+):\s*error:\s*(.*)$")
+GRADLE_TASK_RE = re.compile(r"^>\s*Task\s+(\S+)\s+FAILED$")
+NPM_ERR_RE = re.compile(r"^npm ERR!\s*(.*)$")
+TS_ERROR_RE = re.compile(r"^([^(]+?)\((\d+),(\d+)\):\s*error\s+(TS\d+):\s*(.*)$")
+
+
+def parse_maven_log(text: str) -> list:
+    """Parse Maven output: `[ERROR] path/File.java:[line,col] message` lines.
+
+    Falls back to a single build-level failure when no per-file errors exist.
+    """
+    failures = []
+    for raw in text.splitlines():
+        line = _strip_ts(raw).strip()
+        m = MAVEN_ERROR_RE.match(line)
+        if m:
+            failures.append(Failure(
+                test_id=f"{m.group(1)}:{m.group(2)}",
+                suite="maven",
+                message=m.group(3).strip(),
+                traceback=line,
+                source="maven log",
+            ))
+    if not failures:
+        for raw in text.splitlines():
+            line = _strip_ts(raw).strip()
+            if "BUILD FAILURE" in line or "Failed to execute goal" in line:
+                failures.append(Failure(
+                    test_id="maven:build",
+                    suite="maven",
+                    message=line.lstrip("[ERROR] ").strip(),
+                    traceback=line,
+                    source="maven log",
+                ))
+                break
+    return failures
+
+
+def parse_gradle_log(text: str) -> list:
+    """Parse Gradle output: `Foo.java:10: error: ...` lines and `> Task :x FAILED`."""
+    failures = []
+    for raw in text.splitlines():
+        line = _strip_ts(raw).strip()
+        m = GRADLE_ERROR_RE.match(line)
+        if m:
+            failures.append(Failure(
+                test_id=f"{m.group(1)}:{m.group(2)}",
+                suite="gradle",
+                message=m.group(3).strip(),
+                traceback=line,
+                source="gradle log",
+            ))
+            continue
+        m = GRADLE_TASK_RE.match(line)
+        if m:
+            failures.append(Failure(
+                test_id=f"gradle:{m.group(1)}",
+                suite="gradle",
+                message=f"Task {m.group(1)} failed",
+                traceback=line,
+                source="gradle log",
+            ))
+    return failures
+
+
+def parse_npm_log(text: str) -> list:
+    """Parse npm output: consecutive `npm ERR!` lines form one failure."""
+    failures = []
+    buf, code = [], None
+
+    def flush():
+        nonlocal buf, code
+        if buf:
+            failures.append(Failure(
+                test_id=f"npm:{code}" if code else "npm:install",
+                suite="npm",
+                message=buf[0],
+                traceback="\n".join(buf),
+                source="npm log",
+            ))
+            buf, code = [], None
+
+    for raw in text.splitlines():
+        line = _strip_ts(raw).strip()
+        m = NPM_ERR_RE.match(line)
+        if m:
+            detail = m.group(1).strip()
+            cm = re.match(r"code\s+(\S+)", detail, re.IGNORECASE)
+            if cm:
+                code = cm.group(1)
+            buf.append(detail if detail else line)
+        elif buf and line:
+            flush()
+    flush()
+    return failures
+
+
+def parse_typescript_log(text: str) -> list:
+    """Parse tsc output: `src/file.ts(10,5): error TS2322: message`."""
+    failures = []
+    for raw in text.splitlines():
+        line = _strip_ts(raw).strip()
+        m = TS_ERROR_RE.match(line)
+        if m:
+            failures.append(Failure(
+                test_id=f"{m.group(1)}:{m.group(2)}",
+                suite="tsc",
+                message=f"{m.group(4)}: {m.group(5).strip()}",
+                traceback=line,
+                source="tsc log",
+            ))
+    return failures
 
 
 def iter_junit_results(path: str):

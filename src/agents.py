@@ -8,11 +8,13 @@ credentials; without them the caller should fall back to the rule engine.
 import json
 import os
 
+from .models import CATEGORIES
+
 SYSTEM_PROMPT = """You are a senior SDET triaging automated test failures.
 For each failure, use your tools to investigate: read the stack trace,
 check run history for flakiness, and search for systemic patterns across failures.
 Then give a verdict as JSON with keys:
-  category (assertion|timeout|locator|connection|setup|unknown),
+  category (assertion|timeout|locator|connection|setup|environment|build|dependency|infrastructure|http|data|concurrency|framework|unknown),
   root_cause (one sentence), suggested_fix (one sentence),
   flaky (true/false), priority (P1-P4).
 Be decisive. Prefer evidence from tool output over guessing."""
@@ -76,7 +78,7 @@ def agent_triage(failures, schemas, executors, base_results):
         except RuntimeError as exc:
             result.agent_notes = f"AI agent unavailable: {exc}"
             continue
-        if verdict.get("category") in ("assertion", "timeout", "locator", "connection", "setup", "unknown"):
+        if verdict.get("category") in CATEGORIES:
             result.category = verdict["category"]
         result.root_cause = verdict.get("root_cause", result.root_cause)
         result.suggested_fix = verdict.get("suggested_fix", result.suggested_fix)
