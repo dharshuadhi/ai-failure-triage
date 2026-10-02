@@ -17,8 +17,10 @@
              border:1px solid var(--line); border-radius:10px; padding:.9rem; font:inherit; resize:vertical; }
   textarea:focus { outline:none; border-color:var(--lav); }
   button.go { background:var(--lav); color:var(--bg); border:none; border-radius:10px;
-              padding:.7rem 1.6rem; font:inherit; font-weight:bold; cursor:pointer; font-size:1rem; margin-top:1rem; }
+              padding:.7rem 1.6rem; font:inherit; font-weight:bold; cursor:pointer; font-size:1rem; margin-top:1rem;
+              transition: transform .15s ease; }
   button.go:hover { background:#c4b5fd; }
+  button.go.pressed { transform: scale(.9); background:#c4b5fd; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
           padding:1rem 1.1rem; margin-top:1rem; }
   .card h3 { margin:.1rem 0 .6rem; font-size:.95rem; }
@@ -33,6 +35,57 @@
   table { width:100%; border-collapse:collapse; font-size:.82rem; margin-top:1rem; }
   th,td { border:1px solid var(--line); padding:.5rem .6rem; text-align:left; }
   th { color:var(--lav); }
+
+  /* ---------- mascot: Clue the detective bot ---------- */
+  #mascot { position:fixed; right:20px; bottom:20px; width:84px; z-index:60;
+            transition: transform .75s cubic-bezier(.34,1.3,.64,1); cursor:pointer; }
+  #mascot .bot { animation: bob 2.6s ease-in-out infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+  #mascot .hat { width:0; height:0; margin:0 auto; position:relative;
+                 border-left:20px solid transparent; border-right:20px solid transparent;
+                 border-bottom:24px solid var(--amber); }
+  #mascot .hat::after { content:""; position:absolute; top:20px; left:-30px; width:60px; height:7px;
+                        border-radius:4px; background:#d19a3f; }
+  #mascot .head { width:58px; height:46px; margin:-2px auto 0; border-radius:16px;
+                  background:linear-gradient(160deg,#8f86c9,#5a4f9e); position:relative;
+                  box-shadow:0 4px 14px rgba(167,139,250,.35); }
+  #mascot .eye { position:absolute; top:15px; width:11px; height:13px; border-radius:50%;
+                 background:#14121f; animation: blink 4.2s infinite; }
+  #mascot .eye.left { left:14px; } #mascot .eye.right { right:14px; }
+  @keyframes blink { 0%,93%,100%{transform:scaleY(1)} 96%{transform:scaleY(.08)} }
+  #mascot .mouth { position:absolute; bottom:9px; left:50%; width:20px; height:8px;
+                   border:2.5px solid #14121f; border-top:none; border-radius:0 0 12px 12px;
+                   transform:translateX(-50%); }
+  #mascot .body { width:64px; height:46px; margin:4px auto 0; border-radius:14px;
+                  background:linear-gradient(160deg,#2b2550,#1e1a33); border:1px solid var(--line);
+                  position:relative; }
+  #mascot .arm { position:absolute; top:6px; width:11px; height:32px; border-radius:6px;
+                 background:#5a4f9e; }
+  #mascot .arm.left { left:-9px; }
+  #mascot .arm.right { right:-14px; transform-origin:top center; }
+  #mascot .glass { position:absolute; top:-4px; right:-24px; width:30px; height:30px;
+                   border:4px solid var(--amber); border-radius:50%; background:rgba(245,200,110,.12); }
+  #mascot .glass::after { content:""; position:absolute; bottom:-16px; right:-2px; width:5px; height:18px;
+                          background:var(--amber); border-radius:3px; transform:rotate(-25deg); }
+  #mascot.inspecting .arm.right { animation: inspect 1s ease-in-out infinite; }
+  @keyframes inspect { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-40deg)} }
+  #mascot.waving .arm.right { animation: wave .5s ease-in-out 3; }
+  @keyframes wave { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-55deg)} }
+  #mascot.jumping .bot { animation: jump .65s ease; }
+  @keyframes jump { 0%,100%{transform:translateY(0)} 40%{transform:translateY(-34px) rotate(-6deg)}
+                    60%{transform:translateY(-34px) rotate(6deg)} }
+  #mascot .bubble { position:absolute; bottom:calc(100% + 10px); right:-6px; min-width:150px; max-width:220px;
+                    background:var(--card); border:1px solid var(--amber); border-radius:12px;
+                    padding:.55rem .7rem; font-size:.78rem; line-height:1.4; color:var(--txt);
+                    opacity:0; transform:translateY(6px); transition:all .25s ease; pointer-events:none; }
+  #mascot .bubble::after { content:""; position:absolute; top:100%; right:26px;
+                           border:7px solid transparent; border-top-color:var(--amber); }
+  #mascot .bubble.show { opacity:1; transform:translateY(0); }
+  .confetti { position:fixed; top:-14px; width:9px; height:13px; z-index:99; border-radius:2px;
+              animation: fall 1.9s ease-in forwards; pointer-events:none; }
+  @keyframes fall { to { transform: translateY(108vh) rotate(720deg); } }
+  @media (max-width:600px){ #mascot{ width:64px; right:12px; bottom:12px; }
+    #mascot .bubble{ font-size:.68rem; min-width:120px; } }
 </style>
 </head>
 <body>
@@ -56,15 +109,77 @@ The full project (JUnit XML parsing, flaky detection, owner routing, Azure AI to
 
 <footer>Built by Dharshini Adimoolam · MIT License</footer>
 
+<div id="mascot" title="Clue">
+  <div class="bubble" id="bubble"></div>
+  <div class="bot">
+    <div class="hat"></div>
+    <div class="head"><div class="eye left"></div><div class="eye right"></div><div class="mouth"></div></div>
+    <div class="body"><div class="arm left"></div><div class="arm right"><div class="glass"></div></div></div>
+  </div>
+</div>
+
 <script src="engine.js"></script>
 <script>
   const $ = id => document.getElementById(id);
-  $("go").onclick = () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  /* ---------- Clue the detective bot ---------- */
+  const mascot = $("mascot"), bubble = $("bubble");
+  let bubbleTimer = null;
+  function say(text, ms = 2600) {
+    bubble.textContent = text;
+    bubble.classList.add("show");
+    clearTimeout(bubbleTimer);
+    if (ms) bubbleTimer = setTimeout(() => bubble.classList.remove("show"), ms);
+  }
+  async function walkTo(el) {
+    const m = mascot.getBoundingClientRect(), b = el.getBoundingClientRect();
+    const dx = (b.left + b.width / 2 - 30) - (m.left + m.width / 2);
+    const dy = (b.top - 110) - m.top;
+    mascot.style.transform = `translate(${dx}px, ${dy}px)`;
+    await wait(800);
+  }
+  function pressButton(el) {
+    el.classList.add("pressed");
+    setTimeout(() => el.classList.remove("pressed"), 320);
+  }
+  function celebrate() {
+    mascot.classList.add("jumping");
+    setTimeout(() => mascot.classList.remove("jumping"), 700);
+    const colors = ["#a78bfa", "#f5c86e", "#7ee787", "#ff7b72", "#d6d0ea"];
+    for (let i = 0; i < 26; i++) {
+      const c = document.createElement("div");
+      c.className = "confetti";
+      c.style.left = (38 + Math.random() * 24) + "vw";
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = (Math.random() * 0.35) + "s";
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 2400);
+    }
+  }
+  function goHome() { mascot.style.transform = ""; }
+  const tips = [
+    "Tip: timeouts + locators = the usual suspects. 🔍",
+    "A test failing 5/5 runs isn't flaky — it's broken! 📊",
+    "Psst… I run 100% in your browser. The evidence never leaves. 🕵️",
+    "Connection errors? Always check infra before blaming the app. 🌐",
+  ];
+  mascot.addEventListener("click", () => {
+    mascot.classList.add("waving");
+    setTimeout(() => mascot.classList.remove("waving"), 1600);
+    say(tips[Math.floor(Math.random() * tips.length)]);
+  });
+  setTimeout(() => say("Hi! I'm Clue — paste some failures and I'll crack the case! 🕵️", 4200), 800);
+
+  /* ---------- triage ---------- */
+  function doTriage() {
     const text = $("log").value;
-    if (!text.trim()) { alert("Paste some failing test output first."); return; }
     const failures = parseFailures(text);
     const box = $("result");
-    if (!failures.length) { box.innerHTML = '<div class="card">No failures found. Paste <code>FAILED ...</code> lines or a stack trace.</div>'; return; }
+    if (!failures.length) {
+      box.innerHTML = '<div class="card">No failures found. Paste <code>FAILED ...</code> lines or a stack trace.</div>';
+      return null;
+    }
     const results = triageFailures(failures);
     const s = summarize(results);
     let html = `<div class="card"><h3>Summary</h3><div class="meta">${s.total} failures triaged</div>
@@ -80,7 +195,31 @@ The full project (JUnit XML parsing, flaky detection, owner routing, Azure AI to
     });
     box.innerHTML = html;
     box.scrollIntoView({ behavior:"smooth" });
-  };
+    return { total: s.total, p1: s.by_priority.P1 || 0 };
+  }
+
+  let busy = false;
+  $("go").addEventListener("click", async () => {
+    if (busy) return;
+    if (!$("log").value.trim()) { say("Paste some failing tests first! 📝"); return; }
+    busy = true;
+    try {
+      say("The game is afoot! 🔍");
+      await walkTo($("go"));
+      pressButton($("go"));
+      mascot.classList.add("inspecting");
+      say("Examining the evidence…");
+      await wait(900);
+      mascot.classList.remove("inspecting");
+      const s = doTriage();
+      if (!s) { say("Hmm, no clues in there. Try FAILED lines! 🕵️"); goHome(); return; }
+      celebrate();
+      say(`Case cracked! ${s.total} culprit${s.total === 1 ? "" : "s"}` +
+          (s.p1 ? `, ${s.p1} at P1! 🚨` : " 🕵️"), 3400);
+      await wait(2000);
+      goHome();
+    } finally { busy = false; }
+  });
 </script>
 </body>
 </html>
