@@ -42,6 +42,15 @@ def main(argv=None) -> int:
     ap.add_argument("--engine", choices=["auto", "ai", "rule"], default="auto")
     ap.add_argument("--format", choices=["markdown", "json"], default="markdown")
     ap.add_argument("-o", "--output", help="Write report to file (default: stdout)")
+    ap.add_argument("--cluster", action="store_true",
+                    help="Group failures by stack-trace fingerprint")
+    ap.add_argument("--bug-reports", metavar="DIR",
+                    help="Write one draft bug report per failure cluster into DIR")
+    ap.add_argument("--baseline", metavar="FILE",
+                    help="Compare against a previous JSON report (baseline diff)")
+    ap.add_argument("--analytics", action="store_true",
+                    help="Record this run (JUnit XML) and print the flaky leaderboard")
+    ap.add_argument("--redis-url", help="Redis URL for analytics (default: in-memory)")
     args = ap.parse_args(argv)
 
     paths = collect_inputs(args.input)
@@ -60,6 +69,48 @@ def main(argv=None) -> int:
     summary = summarize(results)
     text = (reporters.render_markdown(results, summary) if args.format == "markdown"
             else reporters.render_json(results, summary))
+
+    extras = []
+    if args.cluster:
+        from src.fingerprint import cluster, render_clusters
+        groups = cluster(failures)
+        extras.append(render_clusters(groups))
+    if args.baseline:
+        from src.bugreports import baseline_diff
+        extras.append(baseline_diff(results, load_json(args.baseline)))
+    if args.bug_reports:
+        from src.bugreports import draft_bug_report
+        from src.fingerprint import cluster
+        os.makedirs(args.bug_reports, exist_ok=True)
+        groups = cluster(failures)
+        by_id = {r.test_id: r for r in results}
+        for fp, members in groups.items():
+            path = os.path.join(args.bug_reports, f"bug-{fp}.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(draft_bug_report(fp, members, by_id))
+        print(f"Wrote {len(groups)} bug report draft(s) -> {args.bug_reports}/", file=sys.stderr)
+    if args.analytics:
+        from src.analytics import FailureAnalytics
+        from src.parsers import iter_junit_results
+        analytics = FailureAnalytics(args.redis_url)
+        test_ids = set()
+        for path in paths:
+            if path.endswith(".xml"):
+                for test_id, passed in iter_junit_results(path):
+                    analytics.record(test_id, passed)
+                    test_ids.add(test_id)
+        if test_ids:
+            board = analytics.leaderboard(sorted(test_ids))
+            extras.append("## Flaky leaderboard (backend: %s)" % analytics.backend)
+            extras.append("| Test | Runs | Fails | Flake rate |")
+            extras.append("|---|---|---|---|")
+            for row in board:
+                extras.append(f"| {row['test_id']} | {row['runs']} | {row['fails']} | "
+                              f"{row['flake_rate']:.0%} |")
+            extras.append(f"\nDistinct failing tests today (HyperLogLog): "
+                          f"{analytics.failing_tests_today()}")
+    if extras:
+        text = text.rstrip() + "\n\n" + "\n\n".join(extras)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as fh:

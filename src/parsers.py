@@ -109,3 +109,16 @@ def parse_any(path: str) -> list:
     text = open(path, encoding="utf-8", errors="replace").read()
     failures = parse_pytest_text(text)
     return failures or parse_generic_log(text)
+
+
+def iter_junit_results(path: str):
+    """Yield (test_id, passed) for every testcase in a JUnit XML report."""
+    tree = ET.parse(path)
+    for tc in tree.iter("testcase"):
+        classname = tc.get("classname", "")
+        name = tc.get("name", "")
+        test_id = f"{classname}::{name}" if classname else name
+        failed = tc.find("failure") is not None or tc.find("error") is not None
+        skipped = tc.find("skipped") is not None
+        if not skipped:
+            yield test_id, not failed
