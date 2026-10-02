@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="pytest" tests="7" failures="4" errors="1" skipped="0" time="42.3">
+  <testcase classname="tests.test_login" name="test_valid_login" time="2.1"/>
+  <testcase classname="tests.test_login" name="test_invalid_password" time="1.8">
+    <failure message="AssertionError: expected dashboard, got login page">Traceback (most recent call last):
+  File "tests/test_login.py", line 34, in test_invalid_password
+    assert driver.title == "Dashboard"
+AssertionError: expected dashboard, got login page</failure>
+  </testcase>
+  <testcase classname="tests.test_login" name="test_session_timeout" time="30.5">
+    <failure message="TimeoutException: waiting for element #logout timed out after 30s">Traceback (most recent call last):
+  File "tests/test_login.py", line 51, in test_session_timeout
+    WebDriverWait(driver, 30).until(EC.visibility_of_element_located((By.ID, "logout")))
+selenium.common.exceptions.TimeoutException: waiting for element #logout timed out after 30s</failure>
+  </testcase>
+  <testcase classname="tests.test_checkout" name="test_apply_coupon" time="3.2">
+    <failure message="NoSuchElementException: Unable to locate element: #coupon-input">Traceback (most recent call last):
+  File "tests/test_checkout.py", line 22, in test_apply_coupon
+    driver.find_element(By.ID, "coupon-input").send_keys("SAVE10")
+selenium.common.exceptions.NoSuchElementException: Unable to locate element: #coupon-input</failure>
+  </testcase>
+  <testcase classname="tests.test_api" name="test_create_order" time="0.9">
+    <error message="requests.exceptions.ConnectionError: connection refused">Traceback (most recent call last):
+  File "tests/test_api.py", line 15, in test_create_order
+    r = requests.post("http://orders.internal/api/orders")
+requests.exceptions.ConnectionError: connection refused</error>
+  </testcase>
+  <testcase classname="tests.test_api" name="test_list_orders" time="1.1"/>
+</testsuite>

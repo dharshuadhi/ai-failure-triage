@@ -1,0 +1,1 @@
+{"tests.test_api::test_create_order":["fail","fail","fail","fail","fail"],"tests.test_checkout::test_apply_coupon":["pass","pass","pass","fail"],"tests.test_login::test_invalid_password":["pass","pass","fail","pass","fail"],"tests.test_login::test_session_timeout":["fail","fail","fail","fail"]}

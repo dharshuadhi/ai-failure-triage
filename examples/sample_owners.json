@@ -1,0 +1,1 @@
+{"*":"qa-oncall","tests.test_api":"platform-team","tests.test_checkout":"payments-team","tests.test_login":"auth-team"}

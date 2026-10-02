@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Failure Triage</title>
+<style>
+  :root { --bg:#14121f; --card:#1e1a33; --line:#3b3355; --txt:#d6d0ea;
+          --lav:#a78bfa; --amber:#f5c86e; --muted:#9a93b8; }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:var(--txt);
+         font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+         max-width:920px; margin:0 auto; padding:2rem 1rem 4rem; }
+  h1 { color:var(--lav); font-size:1.6rem; }
+  h1 .sub { display:block; font-size:.85rem; color:var(--muted); font-weight:normal; margin-top:.4rem; }
+  textarea { width:100%; height:220px; background:var(--card); color:var(--txt);
+             border:1px solid var(--line); border-radius:10px; padding:.9rem; font:inherit; resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--lav); }
+  button.go { background:var(--lav); color:var(--bg); border:none; border-radius:10px;
+              padding:.7rem 1.6rem; font:inherit; font-weight:bold; cursor:pointer; font-size:1rem; margin-top:1rem; }
+  button.go:hover { background:#c4b5fd; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:1rem 1.1rem; margin-top:1rem; }
+  .card h3 { margin:.1rem 0 .6rem; font-size:.95rem; }
+  .meta { font-size:.8rem; color:var(--muted); margin-bottom:.5rem; }
+  .badge { display:inline-block; border-radius:6px; padding:.15rem .55rem; font-size:.75rem; font-weight:bold; }
+  .P1 { background:#ff7b72; color:#14121f; } .P2 { background:var(--amber); color:#14121f; }
+  .P3 { background:var(--lav); color:#14121f; } .P4 { background:var(--muted); color:#14121f; }
+  .cat { color:var(--amber); font-weight:bold; }
+  .hint { color:var(--muted); font-size:.82rem; margin-top:1.6rem; }
+  .hint a { color:var(--lav); }
+  footer { margin-top:3rem; color:var(--muted); font-size:.78rem; text-align:center; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; margin-top:1rem; }
+  th,td { border:1px solid var(--line); padding:.5rem .6rem; text-align:left; }
+  th { color:var(--lav); }
+</style>
+</head>
+<body>
+
+<h1>🔍 AI Failure Triage
+  <span class="sub">Paste failing tests → get category, root cause, and priority. Runs 100% in your browser.</span>
+</h1>
+
+<textarea id="log" placeholder="Paste pytest output (FAILED ... lines) or a stack trace...">FAILED tests/test_login.py::test_invalid_password - AssertionError: expected dashboard, got login page
+FAILED tests/test_login.py::test_session_timeout - TimeoutException: waiting for element #logout timed out after 30s
+FAILED tests/test_checkout.py::test_apply_coupon - NoSuchElementException: Unable to locate element: #coupon-input
+ERROR tests/test_api.py::test_create_order - ConnectionError: connection refused
+</textarea>
+<button class="go" id="go">Triage failures ⚡</button>
+
+<div id="result"></div>
+
+<p class="hint">This demo runs the offline rule engine in your browser — no data leaves this page.
+The full project (JUnit XML parsing, flaky detection, owner routing, Azure AI tool-calling agent) is on
+<a href="https://github.com/dharshuadhi/ai-failure-triage">GitHub</a>.</p>
+
+<footer>Built by Dharshini Adimoolam · MIT License</footer>
+
+<script src="engine.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  $("go").onclick = () => {
+    const text = $("log").value;
+    if (!text.trim()) { alert("Paste some failing test output first."); return; }
+    const failures = parseFailures(text);
+    const box = $("result");
+    if (!failures.length) { box.innerHTML = '<div class="card">No failures found. Paste <code>FAILED ...</code> lines or a stack trace.</div>'; return; }
+    const results = triageFailures(failures);
+    const s = summarize(results);
+    let html = `<div class="card"><h3>Summary</h3><div class="meta">${s.total} failures triaged</div>
+      <table><tr><th>Category</th><th>Count</th></tr>` +
+      Object.entries(s.by_category).map(([c,n]) => `<tr><td>${c}</td><td>${n}</td></tr>`).join("") +
+      `</table></div>`;
+    const order = {P1:0,P2:1,P3:2,P4:3};
+    results.sort((a,b) => order[a.priority]-order[b.priority]).forEach(r => {
+      html += `<div class="card"><h3><span class="badge ${r.priority}">${r.priority}</span> ${r.test_id}</h3>
+        <div class="meta">Category: <span class="cat">${r.category}</span> (confidence ${Math.round(r.confidence*100)}%)</div>
+        <div><b>Root cause:</b> ${r.root_cause}</div>
+        <div style="margin-top:.4rem"><b>Suggested fix:</b> ${r.suggested_fix}</div></div>`;
+    });
+    box.innerHTML = html;
+    box.scrollIntoView({ behavior:"smooth" });
+  };
+</script>
+</body>
+</html>
